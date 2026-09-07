@@ -35,7 +35,12 @@ docker run --rm -p 8090:8090 astro-engine
 ## Blog env
 
 ```
-VEDIC_ENGINE_URL=http://127.0.0.1:8090
+VEDIC_ENGINE_URL=https://astro.adhytm.com
 VEDIC_ENGINE_TIMEOUT_MS=8000
 ```
-# astro-engine
+
+## Production (Dokploy)
+
+- App: `astro-engine` in **Adhyatmic Blog** → production  
+- Health: https://astro.adhytm.com/health  
+- API: `POST https://astro.adhytm.com/v1/rashifal`

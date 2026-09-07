@@ -102,8 +102,6 @@ data class ErrorBody(
 @Serializable
 data class HealthBody(
     val ok: Boolean = true,
-    val engine: String = "vedic-mitra-core-astronomy",
-    val license: String = "engine-only",
 )
 
 fun main() {
