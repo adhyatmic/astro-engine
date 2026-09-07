@@ -1,0 +1,14 @@
+.git
+.gitignore
+.gradle
+.kotlin
+build
+.idea
+*.iml
+.DS_Store
+.env
+.env.*
+README.md
+LICENSING.md
+Dockerfile
+.dockerignore

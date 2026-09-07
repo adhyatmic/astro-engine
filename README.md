@@ -23,6 +23,15 @@ cd astro-engine
 ./gradlew installDist
 ```
 
+## Docker
+
+```bash
+cd astro-engine
+docker build -t astro-engine .
+docker run --rm -p 8090:8090 astro-engine
+# optional: -e VEDIC_ENGINE_PORT=8090
+```
+
 ## Blog env
 
 ```
