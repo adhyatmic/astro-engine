@@ -4,7 +4,7 @@ Self-contained production sidecar for Adhyatmic rashifal.
 
 | Path | Contents |
 |------|----------|
-| `src/` | Our Ktor wrapper (`POST /v1/rashifal`, `GET /health`) |
+| `src/` | Ktor wrapper (`/v1/rashifal`, `/v1/snapshot`, `/v1/festivals`, `/v1/panchak`, …) |
 | `third_party/vedic-mitra/` | Frozen `:core:astronomy` + `:core:common` (DI stripped) |
 
 **Not included:** Vedic Mitra `feature/*` UI (app license exclusive).
