@@ -1,15 +1,13 @@
-# Astro engine (Vedic Mitra engine-only)
+# Astro engine (Adhytm astronomy)
 
-Self-contained production sidecar for Adhyatmic rashifal.
+Self-contained production sidecar for Adhyatmic rashifal / panchang / kundli.
 
 | Path | Contents |
 |------|----------|
-| `src/` | Ktor wrapper (`/v1/rashifal`, `/v1/snapshot`, `/v1/festivals`, `/v1/panchak`, …) |
-| `third_party/vedic-mitra/` | Frozen `:core:astronomy` + `:core:common` (DI stripped) |
+| `src/` | Ktor wrapper (`com.adhytm.engine`) |
+| `third_party/adhytm/` | Frozen `com.adhytm.astronomy` + `com.adhytm.common` |
 
-**Not included:** Vedic Mitra `feature/*` UI (app license exclusive).
-
-Pinned upstream: `third_party/vedic-mitra/UPSTREAM_COMMIT.txt`.
+Pinned upstream SHA: `third_party/adhytm/UPSTREAM_COMMIT.txt`.
 
 ## Run
 
@@ -44,3 +42,5 @@ VEDIC_ENGINE_TIMEOUT_MS=8000
 - App: `astro-engine` in **Adhyatmic Blog** → production  
 - Health: https://astro.adhytm.com/health  
 - API: `POST https://astro.adhytm.com/v1/rashifal`
+- Matchmaking: `POST https://astro.adhytm.com/v1/matchmaking` (Ashtakoota + porutham + mangal)
+- Also: `/v1/varga`, `/v1/dasha`, `/v1/ashtakavarga`, `/v1/doshas`, `/v1/drishti`, `/v1/sankalpa`, `/v1/primer`, `/v1/glossary`

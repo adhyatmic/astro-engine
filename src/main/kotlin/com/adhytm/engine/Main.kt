@@ -1,14 +1,13 @@
 /*
- * Adhyatmic Vedic engine sidecar — commercial engine-only use of Vedic Mitra
- * :core:astronomy. Does not include :feature:* UI. See LICENSING.md.
+ * Adhyatmic astro-engine — frozen com.adhytm.astronomy backend. See LICENSING.md.
  */
 
-package com.adhyatmic.vedicengine
+package com.adhytm.engine
 
-import io.github.vedicmitra.core.astronomy.*
-import io.github.vedicmitra.core.common.coroutines.DispatcherProvider
-import io.github.vedicmitra.core.common.model.GeoCoordinates
-import io.github.vedicmitra.core.common.result.AppResult
+import com.adhytm.astronomy.*
+import com.adhytm.common.coroutines.DispatcherProvider
+import com.adhytm.common.model.GeoCoordinates
+import com.adhytm.common.result.AppResult
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.install
@@ -40,7 +39,7 @@ private object EngineDispatchers : DispatcherProvider {
     override val main: CoroutineDispatcher = Dispatchers.Default
 }
 
-private val engine: AstronomyEngine = DefaultAstronomyEngine(EngineDispatchers)
+internal val engine: AstronomyEngine = DefaultAstronomyEngine(EngineDispatchers)
 
 // ---------------------------------------------------------------------------
 // Shared request shapes
@@ -131,6 +130,21 @@ data class RashifalRequest(
     val at: String? = null,
     val days: Int = 7,
     val birth: BirthInput? = null,
+)
+
+/** One partner's birth for kundali matching. [at] is required. */
+@Serializable
+data class PartnerBirthRequest(
+    val at: String,
+    val latitude: Double = 28.6139,
+    val longitude: Double = 77.2090,
+    val zone: String = "Asia/Kolkata",
+)
+
+@Serializable
+data class MatchmakingRequest(
+    val groom: PartnerBirthRequest,
+    val bride: PartnerBirthRequest,
 )
 
 // ---------------------------------------------------------------------------
@@ -410,7 +424,7 @@ data class RashiDayDto(
 
 @Serializable
 data class RashifalResponse(
-    val source: String = "vedic-mitra-core-astronomy",
+    val source: String = "adhytm-astronomy",
     val licensed: String = "engine-only",
     val rashi: String,
     val rasiIndex: Int,
@@ -420,6 +434,86 @@ data class RashifalResponse(
     val zone: String,
     val today: RashiDayDto,
     val week: List<RashiDayDto>,
+)
+
+@Serializable
+data class MatchPartnerDto(
+    val instant: String,
+    val latitude: Double,
+    val longitude: Double,
+    val zone: String,
+    val nakshatra: NakshatraDto,
+    val moonRasi: RasiDto,
+    val moonPada: Int,
+)
+
+@Serializable
+data class KootaScoreDto(
+    val koota: String,
+    val displayName: String,
+    val points: Double,
+    val maxPoints: Double,
+    val note: String,
+)
+
+@Serializable
+data class AshtakootaDto(
+    val total: Double,
+    val maxTotal: Double,
+    val verdict: String,
+    val verdictLabel: String,
+    val scores: List<KootaScoreDto>,
+    val doshas: List<String>,
+)
+
+@Serializable
+data class PoruthamItemDto(
+    val name: String,
+    val held: Boolean,
+    val governs: String,
+    val working: String,
+)
+
+@Serializable
+data class PoruthamDto(
+    val matched: Int,
+    val total: Int = 4,
+    val items: List<PoruthamItemDto>,
+)
+
+@Serializable
+data class MangalTriggerDto(
+    val reference: String,
+    val house: Int,
+    val description: String,
+    val cancelled: Boolean,
+    val cancellation: String? = null,
+)
+
+@Serializable
+data class MangalDoshaDto(
+    val afflicted: Boolean,
+    val present: Boolean,
+    val triggers: List<MangalTriggerDto>,
+    val cancellations: List<String>,
+)
+
+@Serializable
+data class MangalMatchDto(
+    val groom: MangalDoshaDto,
+    val bride: MangalDoshaDto,
+    /** Classical pair-parihara: both partners carry standing mangal dosha. */
+    val cancelsBetween: Boolean,
+)
+
+@Serializable
+data class MatchmakingResponse(
+    val source: String = "adhytm-astronomy",
+    val groom: MatchPartnerDto,
+    val bride: MatchPartnerDto,
+    val ashtakoota: AshtakootaDto,
+    val porutham: PoruthamDto,
+    val mangal: MangalMatchDto,
 )
 
 @Serializable data class RouteInfo(val method: String, val path: String, val summary: String)
@@ -496,13 +590,17 @@ fun main() {
             post("/v1/rashifal") {
                 call.respond(computeRashifal(call.receive()))
             }
+            post("/v1/matchmaking") {
+                call.respond(computeMatchmaking(call.receive()))
+            }
+            installSellableRoutes()
         }
     }.start(wait = true)
 }
 
 private fun indexResponse() =
     IndexResponse(
-        service = "astro-engine (vedic-mitra core:astronomy, engine-only)",
+        service = "astro-engine (adhytm astronomy)",
         routes =
             listOf(
                 RouteInfo("GET", "/health", "Liveness probe"),
@@ -519,7 +617,12 @@ private fun indexResponse() =
                 RouteInfo("GET", "/v1/muhurta/activities", "List the supported muhurta activities"),
                 RouteInfo("POST", "/v1/panchak", "Panchak kaal: current flag, type, and upcoming windows"),
                 RouteInfo("POST", "/v1/rashifal", "Daily/weekly Moon-transit outlook for a rashi"),
-            ),
+                RouteInfo(
+                    "POST",
+                    "/v1/matchmaking",
+                    "Kundali match: Ashtakoota, porutham, and mangal dosha for two births",
+                ),
+            ) + sellableRouteInfos(),
     )
 
 // ---------------------------------------------------------------------------
@@ -714,6 +817,122 @@ private fun muhurtaActivities(): List<MuhurtaActivityDto> =
         )
     }
 
+private suspend fun computeMatchmaking(req: MatchmakingRequest): MatchmakingResponse {
+    require(req.groom.at.isNotBlank()) { "groom.at is required (ISO birth date-time)" }
+    require(req.bride.at.isNotBlank()) { "bride.at is required (ISO birth date-time)" }
+
+    val groomChart = natalChartForPartner(req.groom)
+    val brideChart = natalChartForPartner(req.bride)
+
+    val groomMoon = groomChart.grahas.first { it.graha == Graha.MOON }
+    val brideMoon = brideChart.grahas.first { it.graha == Graha.MOON }
+    val groomProfile =
+        GunaMilanProfile(
+            nakshatraNumber = groomChart.moonNakshatra.number,
+            moonRasiIndex = groomMoon.rasi.index,
+            moonPada = groomChart.moonPada,
+        )
+    val brideProfile =
+        GunaMilanProfile(
+            nakshatraNumber = brideChart.moonNakshatra.number,
+            moonRasiIndex = brideMoon.rasi.index,
+            moonPada = brideChart.moonPada,
+        )
+
+    val guna = gunaMilan(groomProfile, brideProfile)
+    val porutham = additionalPorutham(groomProfile, brideProfile)
+    val groomMangal = mangalDoshaOf(groomChart)
+    val brideMangal = mangalDoshaOf(brideChart)
+
+    val groomZone = ZoneId.of(req.groom.zone)
+    val brideZone = ZoneId.of(req.bride.zone)
+    return MatchmakingResponse(
+        groom = matchPartnerDto(req.groom, groomChart, groomMoon.rasi, isoFormatter(groomZone)),
+        bride = matchPartnerDto(req.bride, brideChart, brideMoon.rasi, isoFormatter(brideZone)),
+        ashtakoota =
+            AshtakootaDto(
+                total = guna.total,
+                maxTotal = guna.maxTotal,
+                verdict = guna.verdict.name,
+                verdictLabel = guna.verdict.label,
+                scores =
+                    guna.scores.map {
+                        KootaScoreDto(
+                            koota = it.koota.name,
+                            displayName = it.koota.displayName,
+                            points = it.points,
+                            maxPoints = it.koota.maxPoints,
+                            note = it.note,
+                        )
+                    },
+                doshas = guna.doshas,
+            ),
+        porutham =
+            PoruthamDto(
+                matched = porutham.matched,
+                items =
+                    porutham.all.map {
+                        PoruthamItemDto(
+                            name = it.name,
+                            held = it.held,
+                            governs = it.governs,
+                            working = it.working,
+                        )
+                    },
+            ),
+        mangal =
+            MangalMatchDto(
+                groom = mangalDoshaDto(groomMangal),
+                bride = mangalDoshaDto(brideMangal),
+                cancelsBetween = mangalDoshaCancelsBetween(groomMangal, brideMangal),
+            ),
+    )
+}
+
+private suspend fun natalChartForPartner(partner: PartnerBirthRequest): NatalChart {
+    val zoneId = ZoneId.of(partner.zone)
+    val instant = parseInstant(partner.at, zoneId)
+    val location = GeoCoordinates(partner.latitude, partner.longitude)
+    return engine.natalChartAt(instant, location).orThrow("natalChartAt")
+        ?: throw IllegalArgumentException("natalChartAt returned no chart for birth ${partner.at}")
+}
+
+private fun matchPartnerDto(
+    partner: PartnerBirthRequest,
+    chart: NatalChart,
+    moonRasi: Rasi,
+    fmt: DateTimeFormatter,
+): MatchPartnerDto {
+    val zoneId = ZoneId.of(partner.zone)
+    val instant = parseInstant(partner.at, zoneId)
+    return MatchPartnerDto(
+        instant = fmt.fmt(instant),
+        latitude = partner.latitude,
+        longitude = partner.longitude,
+        zone = partner.zone,
+        nakshatra = nakshatraDto(chart.moonNakshatra),
+        moonRasi = rasiDto(moonRasi),
+        moonPada = chart.moonPada,
+    )
+}
+
+internal fun mangalDoshaDto(d: MangalDosha) =
+    MangalDoshaDto(
+        afflicted = d.afflicted,
+        present = d.present,
+        triggers =
+            d.triggers.map {
+                MangalTriggerDto(
+                    reference = it.reference.name,
+                    house = it.house,
+                    description = it.description,
+                    cancelled = it.cancelled,
+                    cancellation = it.cancellation,
+                )
+            },
+        cancellations = d.cancellations,
+    )
+
 private suspend fun computePanchak(req: PanchakRequest): PanchakDto {
     val zoneId = ZoneId.of(req.zone)
     val fmt = isoFormatter(zoneId)
@@ -809,11 +1028,11 @@ private suspend fun computeRashifal(req: RashifalRequest): RashifalResponse {
 // Mappers
 // ---------------------------------------------------------------------------
 
-private fun rasiDto(r: Rasi) = RasiDto(r.index, r.name)
+internal fun rasiDto(r: Rasi) = RasiDto(r.index, r.name)
 
 private fun tithiDto(t: Tithi) = TithiDto(t.number, t.paksha.displayName, t.name)
 
-private fun nakshatraDto(n: Nakshatra) = NakshatraDto(n.number, n.name)
+internal fun nakshatraDto(n: Nakshatra) = NakshatraDto(n.number, n.name)
 
 private fun yogaDto(y: Yoga) = YogaDto(y.number, y.name)
 
@@ -923,7 +1142,7 @@ private fun jatakaDto(j: JatakaProfile) =
         samvatsara = j.samvatsara,
     )
 
-private fun dashaDto(p: DashaPeriod, fmt: DateTimeFormatter, maxLevel: Int): DashaPeriodDto =
+internal fun dashaDto(p: DashaPeriod, fmt: DateTimeFormatter, maxLevel: Int): DashaPeriodDto =
     DashaPeriodDto(
         lord = p.lord.displayName,
         start = fmt.fmt(p.start),
@@ -937,21 +1156,21 @@ private fun dashaDto(p: DashaPeriod, fmt: DateTimeFormatter, maxLevel: Int): Das
 // Helpers
 // ---------------------------------------------------------------------------
 
-private fun <T> AppResult<T>.orThrow(what: String): T =
+internal fun <T> AppResult<T>.orThrow(what: String): T =
     when (this) {
         is AppResult.Success -> data
         is AppResult.Failure -> throw IllegalArgumentException("$what failed: ${cause.message}")
     }
 
-private fun isoFormatter(zoneId: ZoneId): DateTimeFormatter =
+internal fun isoFormatter(zoneId: ZoneId): DateTimeFormatter =
     DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX").withZone(zoneId)
 
-private fun DateTimeFormatter.fmt(i: Instant): String =
+internal fun DateTimeFormatter.fmt(i: Instant): String =
     format(JavaInstant.ofEpochMilli(i.toEpochMilliseconds()))
 
-private fun DateTimeFormatter.fmtOrNull(i: Instant?): String? = i?.let { fmt(it) }
+internal fun DateTimeFormatter.fmtOrNull(i: Instant?): String? = i?.let { fmt(it) }
 
-private fun parseInstant(
+internal fun parseInstant(
     value: String?,
     zoneId: ZoneId,
 ): Instant {

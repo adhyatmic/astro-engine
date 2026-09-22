@@ -1,7 +1,7 @@
-package com.adhyatmic.vedicengine
+package com.adhytm.engine
 
-import io.github.vedicmitra.core.astronomy.AstronomyEngine
-import io.github.vedicmitra.core.common.result.AppResult
+import com.adhytm.astronomy.AstronomyEngine
+import com.adhytm.common.result.AppResult
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.Instant
@@ -57,12 +57,6 @@ private val TYPE_BY_NAK =
 
 private fun inPanchak(number: Int, pada: Int): Boolean =
     number > DHANISHTA || (number == DHANISHTA && pada >= 2)
-
-private fun <T> AppResult<T>.orThrow(what: String): T =
-    when (this) {
-        is AppResult.Success -> data
-        is AppResult.Failure -> throw IllegalArgumentException("$what failed: ${cause.message}")
-    }
 
 private suspend fun nakStateAt(engine: AstronomyEngine, instant: Instant): NakState {
     val p = engine.panchangaNowAt(instant).orThrow("panchangaNowAt")

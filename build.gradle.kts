@@ -4,7 +4,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "2.1.21"
 }
 
-group = "com.adhyatmic"
+group = "com.adhytm"
 version = "1.0.0-engine"
 
 repositories {
@@ -31,11 +31,11 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.adhyatmic.vedicengine.MainKt")
+    mainClass.set("com.adhytm.engine.MainKt")
 }
 
-// Self-contained freeze — no vendor/vedic-mitra checkout required.
-val frozenRoot = rootProject.projectDir.resolve("third_party/vedic-mitra")
+// Self-contained freeze — no vendor checkout required.
+val frozenRoot = rootProject.projectDir.resolve("third_party/adhytm")
 
 sourceSets {
     main {
