@@ -1,4 +1,4 @@
-# Multi-stage build for Adhyatmic astro-engine (Ktor + frozen Vedic Mitra core)
+# Multi-stage build for Adhyatmic astro-engine (Ktor + frozen com.adhytm.astronomy)
 
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /app

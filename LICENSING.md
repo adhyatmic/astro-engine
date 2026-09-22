@@ -1,6 +1,7 @@
 # Licensing — astro-engine
 
-- **Wrapper** (`src/`): Adhyatmic.
-- **Frozen engine** (`third_party/vedic-mitra/`): Vedic Mitra `:core:astronomy` +
-  `:core:common`, under commercial **engine-only** license.
-- **Excluded:** `feature/*` UI — full app license is exclusive.
+- **Wrapper** (`src/` → `com.adhytm.engine`): Adhyatmic / Adhytm.
+- **Frozen engine** (`third_party/adhytm/`): `com.adhytm.astronomy` +
+  `com.adhytm.common` (backend engine).
+- **Legacy copy** (`third_party/vedic-mitra/`): previous package layout; unused by
+  the build. Safe to remove after you confirm production uses the new freeze.
